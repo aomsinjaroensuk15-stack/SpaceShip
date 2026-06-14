@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Laser Dodge 3D: Ironclad Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background-color: #010204;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            touch-action: none; /* ป้องกันเบราว์เซอร์มือถือดึงหน้าจอลงเพื่อรีเฟรช */
+        }
+        
+        /* เลเยอร์พื้นหลังกราฟิก 3D (อยู่ล่างสุด) */
+        #gameCanvasContainer {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* --- โครงสร้างเลเยอร์ควบคุม UI คมชัด ทะลุทะลวงการสัมผัส --- */
+        .hud-btn {
+            position: fixed;
+            top: 20px;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #fff;
+            border: 2px solid #2d333f;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 90; /* ลอยอยู่ชั้นบนของหน้าจอหลัก */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            transition: transform 0.1s;
+        }
+        .hud-btn:active { transform: scale(0.95); }
+
+        #shopBtn {
+            left: 20px;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 140, 0, 0.15));
+            border-color: #ffd700;
+        }
+        #exitBtn {
+            right: 20px;
+            background: linear-gradient(135deg, rgba(255, 51, 51, 0.3), rgba(150, 0, 0, 0.15));
+            border-color: #ff3333;
+        }
+
+        #hudStats {
+            position: fixed;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 80;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: rgba(10, 15, 26, 0.8);
+            padding: 6px 20px;
+            border-radius: 30px;
+            border: 1px solid #1f293d;
+            pointer-events: none; /* ยอมให้สัมผัสทะลุผ่านได้เพื่อไม่ให้บังโมเดล */
+            text-shadow: 0 2px 4px #000;
+        }
+
+        /* เลเยอร์เมนูครอบจอแบบสัมบูรณ์ (ป้องกันการกดทะลุชั้นกราฟิก) */
+        .ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(3, 5, 10, 0.85);
+            z-index: 100; /* ดันขึ้นไปอยู่จุดสูงสุดเหนือแผงปุ่ม HUD ทั้งปวง */
+            padding: 20px;
+        }
+        .hide { display: none !important; }
+
+        .menu-card {
+            background: #090d16;
+            border: 2px solid #00f0ff;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 0 35px rgba(0, 240, 255, 0.3);
+            text-align: center;
+        }
+        
+        .view-options {
+            display: flex;
+            gap: 15px;
+            margin: 25px 0;
+        }
+        .view-btn {
+            flex: 1;
+            padding: 14px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            background: #121824;
+            color: #8b949e;
+            border: 2px solid #21262d;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .view-btn.selected {
+            border-color: #00f0ff;
+            color: #00f0ff;
+            background: rgba(0, 240, 255, 0.15);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        .start-btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #00f0ff, #7000ff);
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 240, 255, 0.4);
+            transition: transform 0.1s;
+        }
+        .start-btn:active { transform: scale(0.98); }
+
+        .shop-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .shop-item {
+            background: #111622;
+            border: 1px solid #2d333f;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-align: left;
+        }
+        .buy-btn {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .buy-btn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+        /* แผงควบคุมเลี้ยวซ้ายขวาใต้จอภาพ (โหมดการเล่นจริง) */
+        #controls {
+            position: fixed;
+            bottom: 25px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 25px;
+            gap: 20px;
+            z-index: 50;
+        }
+        .ctrl-btn {
+            flex: 1;
+            height: 65px;
+            background: rgba(15, 22, 34, 0.7);
+            border: 2px solid #2d333f;
+            border-radius: 14px;
+            color: #fff;
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="shopBtn" class="hud-btn">💎 ร้านค้า</button>
+    <button id="exitBtn" class="hud-btn">❌ ออก</button>
+
+    <div id="hudStats">
+        คะแนน: <span id="score">0</span> | 💎 <span id="scraps">0</span>
+    </div>
+
+    <div id="controls">
+        <div id="leftBtn" class="ctrl-btn">◀</div>
+        <div id="rightBtn" class="ctrl-btn">▶</div>
+    </div>
+
+    <div id="menuLayer" class="ui-layer">
+        <div class="menu-card">
+            <h2 id="menuTitle" style="color: #00f0ff; font-size: 1.8rem; letter-spacing: 1px;">LASER DODGE 3D</h2>
+            <p style="color: #8b949e; margin-top: 6px; font-size: 0.9rem;">คลิกเลือกโหมดกล้อง (ฉากหลังจะสลับมุมมองทันที)</p>
+            
+            <div class="view-options">
+                <button id="btn1st" class="view-btn selected">1st Person<br>(ในห้องนักบิน)</button>
+                <button id="btn3rd" class="view-btn">3rd Person<br>(ตามหลังยาน)</button>
+            </div>
+
+            <button id="startBtn" class="start-btn">เริ่มเดินเครื่องยนต์</button>
+        </div>
+    </div>
+
+    <div id="shopLayer" class="ui-layer hide">
+        <div class="menu-card" style="border-color: #ffd700; box-shadow: 0 0 35px rgba(255,215,0,0.25);">
+            <h2 style="color: #ffd700; font-size: 1.5rem;">🌌 อู่ซ่อมบำรุงอวกาศ</h2>
+            <div class="shop-grid">
+                <div class="shop-item">
+                    <div>
+                        <h4 style="color:#00f0ff">ติดตั้งโล่พลังงาน (Shield)</h4>
+                        <p id="shieldDesc" style="font-size:0.8rem; color:#8b949e">กันชนภัย 1 ครั้ง (มีอยู่: 0)</p>
+                    </div>
+                    <button class="buy-btn" id="buyShield">ซื้อ (3 💎)</button>
+                </div>
+                <div class="shop-item">
+                    <div>
+                        <h4 style="color:#00f0ff">จูนอัปท่อไอพ่น (Engine)</h4>
+                        <p id="speedDesc" style="font-size:0.8rem; color:#8b949e">โยกซ้ายขวาไวขึ้น (Lv.1)</p>
+                    </div>
+                    <button class="buy-btn" id="buySpeed">ซื้อ (2 💎)</button>
+                </div>
+            </div>
+            <button id="closeShopBtn" class="start-btn" style="background:#21262d; margin-top:18px; box-shadow:none;">ปิดหน้าต่างร้าน</button>
+        </div>
+    </div>
+
+    <div id="gameCanvasContainer"></div>
+
+    <script>
+        // --- 🛰️ ระบบดักจับข้อผิดพลาดขั้นสูงสุดเพื่อการตรวจสอบความโปร่งใส ---
+        window.onerror = function (message, source, lineno, colno, error) {
+            alert(`[ENGINE ERROR]: ${message} ณ บรรทัดที่ ${lineno}`);
+            return false;
+        };
+
+        // --- 📦 บังคับประกาศตัวแปรในระดับ GLOBAL SCOPE ขาดจากกัน ---
+        let scene, camera, renderer;
+        let playerGroup, coreMesh, wingMesh, cockpitMesh, shieldMesh;
+        let starField, thrusterParticles;
+        let obstacles = [];
+        let gameActive = false, isPaused = false;
+        let score = 0, scraps = 0;
+        let cameraMode = '1st'; 
+        let keys = { left: false, right: false };
+        let spawnTimer = 0, spawnInterval = 35;
+        let speedMultiplier = 1;
+
+        const playerState = {
+            x: 0,
+            speed: 0.25,
+            speedLv: 1,
+            shield: 0,
+            roadLimit: 5.7
+        };
+
+        // ปลุกพลังงานเอนจิ้นกราฟิกทันทีเมื่อเบราว์เซอร์พร้อมรัน
+        initIroncladEngine();
+
+        function initIroncladEngine() {
+            const container = document.getElementById('gameCanvasContainer');
+            
+            // 1. สถาปนา Scene ฉากหลังมิติมืด
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020407);
+            scene.fog = new THREE.FogExp2(0x020407, 0.012);
+
+            // 2. ออกแบบเลนส์กล้องรับภาพ
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            // 3. ก่อตั้งตัวเรนเดอร์เมทริกซ์ภาพ
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // 4. ติดตั้งระบบประทีปแสงไฟกระจายทิศทาง
+            const lightAmbient = new THREE.AmbientLight(0xffffff, 0.55);
+            scene.add(lightAmbient);
+            const lightDirect = new THREE.DirectionalLight(0x00f0ff, 0.85);
+            lightDirect.position.set(0, 15, 8);
+            scene.add(lightDirect);
+
+            // 5. ปูเส้นทางไฮเวย์ความเร็วสูง (Z-Axis Track)
+            const trackGeo = new THREE.BoxGeometry(13, 0.2, 320);
+            const trackMat = new THREE.MeshPhongMaterial({ color: 0x0d111a, specular: 0x00f0ff, shininess: 20 });
+            const trackMesh = new THREE.Mesh(trackGeo, trackMat);
+            trackMesh.position.set(0, -0.1, -150);
+            scene.add(trackMesh);
+
+            const grid = new THREE.GridHelper(13, 12, 0x00f0ff, 0x1a2235);
+            grid.position.set(0, 0.01, -150);
+            scene.add(grid);
+
+            // 6. ประกอบร่างโครงข่ายโมเดลยาน 3D (ผูกติดเข้าระดับ Global Variables)
+            playerGroup = new THREE.Group();
+            
+            const coreGeo = new THREE.ConeGeometry(0.35, 1.4, 5);
+            coreGeo.rotateX(Math.PI / 2); // ส่องปลายแหลมกรวยไปข้างหน้า
+            const coreMat = new THREE.MeshPhongMaterial({ color: 0x00f0ff, emissive: 0x0044cc });
+            coreMesh = new THREE.Mesh(coreGeo, coreMat); // กำหนดลงตัวแปร Global โดยตรงห้ามใส่ let/const
+            playerGroup.add(coreMesh);
+
+            const wingGeo = new THREE.BoxGeometry(1.7, 0.08, 0.45);
+            const wingMat = new THREE.MeshPhongMaterial({ color: 0x7800ff });
+            wingMesh = new THREE.Mesh(wingGeo, wingMat);
+            wingMesh.position.set(0, -0.05, 0.2);
+            playerGroup.add(wingMesh);
+
+            const cockpitGeo = new THREE.BoxGeometry(0.18, 0.15, 0.35);
+            const cockpitMat = new THREE.MeshPhongMaterial({ color: 0xffd700 });
+            cockpitMesh = new THREE.Mesh(cockpitGeo, cockpitMat);
+            cockpitMesh.position.set(0, 0.15, -0.1);
+            playerGroup.add(cockpitMesh);
+
+            // ทรงกลมบาเรียสีเขียวมิ้นต์รอบตัวถังยาน
+            const shieldGeo = new THREE.SphereGeometry(1.1, 16, 16);
+            const shieldMat = new THREE.MeshBasicMaterial({ color: 0x00ffaa, wireframe: true, transparent: true, opacity: 0.0 });
+            shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+            playerGroup.add(shieldMesh);
+
+            playerGroup.position.set(0, 0.4, 0); 
+            scene.add(playerGroup);
+
+            // 7. จัดตั้งระบบอนุภาคท้ายเปลวไฟไอพ่น
+            setupThrusterGas();
+
+            // 8. หว่านดวงดาวจำลองทิศทางความเร็วรอบพิกัด
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 380;
+            const starPositions = new Float32Array(starCount * 3);
+            for(let i=0; i<starCount*3; i+=3) {
+                starPositions[i] = (Math.random() - 0.5) * 90;
+                starPositions[i+1] = (Math.random()) * 35;
+                starPositions[i+2] = -Math.random() * 220;
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.85 });
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+
+            // เรียกทำงานคลังแสงผูกปุ่มไอคอนรับสัญญานสัมผัส
+            deployListeners();
+
+            // เริ่มคำสั่งวาดภาพแบบ Real-time ทันที ไม่มีอะไรบล็อกเฟรมแรกได้
+            executeSecureRenderLoop();
+        }
+
+        function setupThrusterGas() {
+            const pCount = 20;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(pCount * 3);
+            for(let i=0; i<pCount*3; i+=3) {
+                positions[i] = 0; positions[i+1] = 0; positions[i+2] = 0.7;
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({ color: 0xffaa00, size: 0.15, transparent: true, opacity: 0.8 });
+            thrusterParticles = new THREE.Points(geometry, material);
+            playerGroup.add(thrusterParticles);
+        }
+
+        // --- 🤝 ระบบผูกพันธสัญญาปุ่มกดแบบเสถียรภาพสูง (Flawless Interaction Layout) ---
+        function deployListeners() {
+            // ใช้ Click Event มาตรฐานตัวท็อป ปลอดภัยบนทุกเว็บบราวเซอร์ ไม่โดนแช่แข็ง
+            document.getElementById('btn1st').addEventListener('click', function() {
+                cameraMode = '1st';
+                document.getElementById('btn1st').classList.add('selected');
+                document.getElementById('btn3rd').classList.remove('selected');
+            });
+
+            document.getElementById('btn3rd').addEventListener('click', function() {
+                cameraMode = '3rd';
+                document.getElementById('btn3rd').classList.add('selected');
+                document.getElementById('btn1st').classList.remove('selected');
+            });
+
+            document.getElementById('startBtn').addEventListener('click', beginFlightMission);
+            document.getElementById('shopBtn').addEventListener('click', openShopInterface);
+            document.getElementById('closeShopBtn').addEventListener('click', closeShopInterface);
+            document.getElementById('exitBtn').addEventListener('click', terminateMissionToMenu);
+
+            // ปุ่มทำรายการซื้อขายสินค้าอัปเกรดไอเทม
+            document.getElementById('buyShield').addEventListener('click', function() {
+                if(scraps >= 3) { scraps -= 3; playerState.shield++; updateGlobalHUD(); }
+            });
+            document.getElementById('buySpeed').addEventListener('click', function() {
+                if(scraps >= 2 && playerState.speedLv < 5) { 
+                    scraps -= 2; playerState.speedLv++; 
+                    playerState.speed = 0.25 + (playerState.speedLv * 0.05); 
+                    updateGlobalHUD(); 
+                }
+            });
+
+            // คุมคีย์บอร์ด PC เดสก์ท็อป
+            window.addEventListener('keydown', function(e) {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+            });
+            window.addEventListener('keyup', function(e) {
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            });
+
+            // คุมการทัชสกรีนซ้ายขวาบนจอมือถือ (ใช้ Pointer Down/Up เสถียรกว่าการใช้ Touch โบราณ)
+            const lBtn = document.getElementById('leftBtn');
+            const rBtn = document.getElementById('rightBtn');
+            
+            lBtn.addEventListener('pointerdown', function() { keys.left = true; });
+            lBtn.addEventListener('pointerup', function() { keys.left = false; });
+            lBtn.addEventListener('pointercancel', function() { keys.left = false; });
+
+            rBtn.addEventListener('pointerdown', function() { keys.right = true; });
+            rBtn.addEventListener('pointerup', function() { keys.right = false; });
+            rBtn.addEventListener('pointercancel', function() { keys.right = false; });
+
+            window.addEventListener('resize', function() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function beginFlightMission() {
+            // ซ่อนชั้นการแสดงผลเมนูและร้านค้าทั้งหมดออกไปอย่างสมบูรณ์แบบ
+            document.getElementById('menuLayer').classList.add('hide');
+            document.getElementById('shopLayer').classList.add('hide');
+            
+            // คืนค่ารีเซ็ตระบบพารามิเตอร์แกนข้อมูลหลัก
+            score = 0;
+            scraps = 0;
+            speedMultiplier = 1;
+            spawnInterval = 35;
+            playerState.x = 0;
+            playerState.shield = 0;
+            playerState.speedLv = 1;
+            playerState.speed = 0.25;
+
+            playerGroup.position.set(0, 0.4, 0);
+            playerGroup.rotation.set(0, 0, 0);
+
+            // เก็บกวาดเลเซอร์และสิ่งขวางกั้นรอบเก่าออกจากห้วงอวกาศจำลอง
+            obstacles.forEach(function(obs) { scene.remove(obs.mesh); });
+            obstacles = [];
+
+            updateGlobalHUD();
+            isPaused = false;
+            gameActive = true;
+        }
+
+        // --- ⚡ ระบบวิศวกรรมสุ่มเสกสิ่งกีดขวางพลาสม่า ---
+        function deployCosmicObstacle() {
+            const seed = Math.random();
+            let geo, mat, type;
+            let w = 2, h = 0.5;
+            let targetX = (Math.random() * 9.6) - 4.8; // ควบคุมวงโคจรไม่ให้เกิดตกขอบทางวิ่ง
+
+            if (seed < 0.22) {
+                // 💎 แร่ผลึกทองคำแปดหน้า (Scrap Octahedron)
+                type = 'scrap';
+                geo = new THREE.OctahedronGeometry(0.38, 0);
+                mat = new THREE.MeshPhongMaterial({ color: 0xffd700, emissive: 0x775500, shininess: 40 });
+                h = 0.38;
+            } else if (seed < 0.68) {
+                // 🟥 กำแพงรังสีความร้อนเลเซอร์พลังงานสูญญากาศ
+                type = 'laser';
+                w = Math.random() * 3.8 + 2.2;
+                geo = new THREE.BoxGeometry(w, 0.35, 0.5);
+                mat = new THREE.MeshPhongMaterial({ color: 0xff0055, emissive: 0x440011 });
+            } else {
+                // 🟪 หอคอยไฟฟ้าสกัดกั้นคลื่นความถี่ (Mega Pillar Barrier)
+              
