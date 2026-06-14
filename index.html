@@ -496,4 +496,91 @@
                 mat = new THREE.MeshPhongMaterial({ color: 0xff0055, emissive: 0x440011 });
             } else {
                 // 🟪 หอคอยไฟฟ้าสกัดกั้นคลื่นความถี่ (Mega Pillar Barrier)
-              
+                                  // เงื่อนไขตรวจสอบการปะทะกล่องกระแทกกล่อง
+                    if (playerBox.intersectsBox(obsBox)) {
+                        if (obs.type === 'scrap') {
+                            scraps++;
+                            updateGlobalHUD();
+                            scene.remove(obs.mesh);
+                            obstacles.splice(i, 1);
+                        } else {
+                            // ชนเข้ากับเลเซอร์ร้ายแรง
+                            if (playerState.shield > 0) {
+                                playerState.shield--; // หักล้างสถานะโล่ไปหนึ่งหน่วยเพื่อเอาชีวิตรอด
+                                updateGlobalHUD();
+                                scene.remove(obs.mesh);
+                                obstacles.splice(i, 1);
+                            } else {
+                                triggerMissionFailure();
+                            }
+                        }
+                        continue;
+                    }
+
+                    // ลบสิ่งของที่วิ่งพ้นสายตากระจกมองหลังยานออกไปเพื่อคืนค่าหน่วยความจำเบราว์เซอร์
+                    if (obs.mesh.position.z > 12) {
+                        scene.remove(obs.mesh);
+                        obstacles.splice(i, 1);
+                        if (obs.type !== 'scrap') {
+                            score++;
+                            updateGlobalHUD();
+                        }
+                    }
+                }
+            }
+
+            // 4. บัญชาการมุมมองกล้องอิงตามเวกเตอร์สายตาตลอดเวลาแบบเรียลไทม์
+            if (cameraMode === '1st') {
+                camera.position.set(playerGroup.position.x, playerGroup.position.y + 0.38, playerGroup.position.z - 0.55);
+                camera.lookAt(playerGroup.position.x, playerGroup.position.y + 0.38, playerGroup.position.z - 28);
+            } else {
+                camera.position.set(playerGroup.position.x * 0.45, playerGroup.position.y + 4.0, playerGroup.position.z + 6.8);
+                camera.lookAt(playerGroup.position.x, playerGroup.position.y + 0.4, playerGroup.position.z - 4);
+            }
+
+            // ส่งข้อมูลออกสู่หน้าจอเพื่อแสดงผลแสงและเงา
+            renderer.render(scene, camera);
+        }
+
+        // --- 📊 ส่วนจัดการแสดงผลข้อความ และควบคุมสวิตช์มิติหน้าร้านค้า ---
+        function updateGlobalHUD() {
+            document.getElementById('score').innerText = score;
+            document.getElementById('scraps').innerText = scraps;
+            document.getElementById('shieldDesc').innerText = `กันชนภัย 1 ครั้ง (มีอยู่: ${playerState.shield})`;
+            document.getElementById('speedDesc').innerText = `โยกซ้ายขวาไวขึ้น (Lv.${playerState.speedLv}/5)`;
+            
+            document.getElementById('buyShield').disabled = scraps < 3;
+            document.getElementById('buySpeed').disabled = scraps < 2 || playerState.speedLv >= 5;
+        }
+
+        function openShopInterface() {
+            if(!gameActive) return; 
+            isPaused = true;
+            updateGlobalHUD();
+            document.getElementById('shopLayer').classList.remove('hide');
+        }
+
+        function closeShopInterface() {
+            document.getElementById('shopLayer').classList.add('hide');
+            isPaused = false;
+        }
+
+        function triggerMissionFailure() {
+            gameActive = false;
+            document.getElementById('menuTitle').innerText = "💥 ยานถูกเผาทำลายลงแล้ว!";
+            document.getElementById('menuTitle').style.color = "#ff3333";
+            document.getElementById('startBtn').innerText = "กู้คืนระบบเพื่อลุยซ้ำ";
+            document.getElementById('menuLayer').classList.remove('hide');
+        }
+        function terminateMissionToMenu() {
+            gameActive = false;
+            isPaused = false;
+            document.getElementById('menuTitle').innerText = "LASER DODGE 3D";
+            document.getElementById('menuTitle').style.color = "#00f0ff";
+            document.getElementById('startBtn').innerText = "เริ่มเดินเครื่องยนต์";
+            document.getElementById('menuLayer').classList.remove('hide');
+            document.getElementById('shopLayer').classList.add('hide');
+        }
+    </script>
+</body>
+</html>
